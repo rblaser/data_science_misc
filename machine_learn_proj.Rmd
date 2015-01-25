@@ -1,0 +1,167 @@
+---
+title: "Machine Learning Project"
+author: "Robert Blaser"
+date: "Saturday, January 24, 2015"
+output: html_document
+---
+
+## Machine Learning Project
+
+### Executive Summary:
+This document presents the results from the Practical Machine Learning Project.  Within the document, I demonstrate a methodical framework as follows:
+
+* Load the data
+* Clean the data
+* Partition the data into Training and Testing sets
+* Build the Model
+* Evaluate the Model against the Training and Testing sets
+
+The Random Forests Model was chosen and found to have acceptable accuracy and furthermore, predicted the correct answers for the Testing set. 
+
+### Background:
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+### Load the Libraries:
+I load the needed libraries and set the seed:
+
+```{r}
+library(caret)
+library(randomForest)
+set.seed(1234)
+```
+
+### Load the Data:
+Next, I load the data by setting the URL's and read in the "pml-training.csv" and "pml-testing.csv" files:
+
+```{r}
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+# If files do not exist in your working directory, please uncomment the following 2 lines:
+## training_orig <- read.csv(url(trainUrl), header=TRUE, as.is = TRUE, stringsAsFactors = FALSE, na.strings=c("NA","#DIV/0!",""))
+## testing_orig <- read.csv(url(testUrl), header=TRUE, as.is = TRUE, stringsAsFactors = FALSE, na.strings=c("NA","#DIV/0!",""))
+
+# if files already exit in your working directory, please comment the following 2 lines (as this will run faster):
+training_orig <- read.csv(file="pml-training.csv", header=TRUE, as.is = TRUE, stringsAsFactors = FALSE, na.strings=c("NA","#DIV/0!",""))
+testing_orig <- read.csv(file="pml-testing.csv", header=TRUE, as.is = TRUE, stringsAsFactors = FALSE, na.strings=c("NA","#DIV/0!",""))
+
+dim(training_orig)
+dim(testing_orig)
+colnames(training_orig)
+```
+
+As can be seen above, the training and testing data set dimensions are listed along with the column names.
+
+### Clean the Data:
+
+After researching the additional information at the website and further viewing the files, there are 1) columns that are non-valued added for fitting the model and 2) many columns that are predominately NA's.  
+The first 7 columns are background information such as ID, time, etc. and are value added to developing the model.  Thus, I will remove them.
+
+#### Remove the Non-important Vars:
+
+Remove the first 7 columns:
+
+```{r}
+training = training_orig[,-c(1:7)]
+testing = testing_orig[,-c(1:7)]
+```
+
+#### Remove the Vars with limited Data:
+
+Remove the columns with very little data:
+
+```{r}
+NA_columns_train <- apply(training,2,function(x) {sum(is.na(x))}) 
+training <- training[,which(NA_columns_train == 0)]
+NA_columns_test <- apply(testing,2,function(x) {sum(is.na(x))}) 
+testing <- testing[,which(NA_columns_test == 0)]
+dim(training)
+dim(testing)
+colnames(training)
+```
+
+After cleaning the data, the total number of columns has been reduced from 160 total columns to 53 useful columns.  Also, as seen above, the resulting variables to be fitted are listed.
+
+### Partition the Data:
+
+I now partition the training data into two sets using a 60% /40% split : myTraining and myTesting test sets.  Also, I factor the class variable.
+
+```{r}
+inTrain <- createDataPartition(y=training$classe, p=0.6, list=FALSE)
+myTraining <- training[inTrain, ]; myTesting <- training[-inTrain, ]
+myTraining$classe <- as.factor(myTraining$classe)
+dim(myTraining); dim(myTesting)
+```
+
+The resulting number of variables to be modelled was 53 and the rows per partition can be see above.
+
+### Develop the Model:
+
+I used the random forest algorithm method as applied to the training set to develop the model. Cross-validation is executed during the model building execution. 
+
+```{r}
+# Please uncomment the following two lines if running on your machine for the first time (will save considerable time as it takes ~4 hours to run on a slow PC!):
+## model = train(classe~., method="rf", data=myTraining)
+## saveRDS(model, "rfmodel.RDS")
+model = readRDS("rfmodel.RDS")
+print(model)
+```
+
+The resulting accuracy of the "Random Forest" model was 98.6% (for mtry = 2) and was considered acceptable (considering it took ~4 hours to run on my slow PC!!).  
+
+### Prediction and Errors:
+
+I evaluate the model against the 1) training set for which the model was built from and, 2) the validation set.
+
+#### Training set Prediction
+
+I evaluate the model against the training set:
+
+```{r}
+# Prediction test for training subset using the model:
+prediction <- predict(model, myTraining)
+# Using confusion Matrix to outcome versus the true outcome for my_training set:
+confusionMatrix(prediction, myTraining$classe)
+mean(prediction == myTraining$classe) * 100
+```
+
+The resulting prediction, from a training set model as applied to the training set has shown that the model was accurate (accuracy was ~100%) as compared to the known class variable as it should be since the model was developed on the training set.  
+
+#### Validation set Prediction
+
+I now apply the model to the cross-validation set (my partitioned "testing" data, partitioned from the "training" data set originally imported as "pml-training.csv"):
+
+```{r}
+# Prediction test for my_testing subset using the model:
+prediction <- predict(model, myTesting)
+# Using confusion Matrix to outcome versus the true outcome for my_testing set:
+confusionMatrix(prediction, myTesting$classe)
+mean(prediction == myTesting$classe) * 100
+```
+
+The resulting prediction, from a training set model as applied to the validation set has shown that the model is accurate as compared to the known class variable.  Accuracy was 99.1%.
+
+#### Test set Prediction
+
+I now apply the model to the impoorted test data set (imported "pml-testing.csv"):
+
+```{r}
+testing_prediction <- predict(model, testing)
+testing_prediction
+```
+
+The resulting class predictions for the testing data set are listed above.  These were checked against the correct answers when submitted to the Project website and were found to be 100% correct.
+
+### Conclusion
+
+In summary, I performed the following:
+
+* loaded the training and testing data sets
+* explored the training data set and correspondingly cleaned the data based on my findings
+* created a highly accurate model
+* evaluated the model against the training set
+* evaluated the model against the validation set and evaulated the out of sample error
+* applied the model to the test set
+
+The resulting predictions on the test set were found to be correct and thus the project was a success!
